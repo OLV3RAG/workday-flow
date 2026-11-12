@@ -16,6 +16,8 @@ type HeaderProps = {
   syncStatus: string;
   view: BoardView;
   signingOut: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
   onViewChange: (view: BoardView) => void;
   onSignOut: () => void;
 };
@@ -30,6 +32,8 @@ export function Header({
   syncStatus,
   view,
   signingOut,
+  refreshing,
+  onRefresh,
   onViewChange,
   onSignOut,
 }: HeaderProps) {
@@ -73,7 +77,19 @@ export function Header({
                 <span className={`relative h-2 w-2 rounded-full ${pulse}`} />
               </span>
               <span className="sr-only">{syncStatus}</span>
-              <span aria-hidden="true">{syncPhase === "live" ? "En vivo" : syncPhase === "saving" ? "Guardando" : syncPhase === "offline" ? "Sin red" : syncPhase === "error" ? "Error" : "Cargando"}</span>
+              <span aria-hidden="true">
+                {syncPhase === "live"
+                  ? "En vivo"
+                  : syncPhase === "saving"
+                    ? "Guardando"
+                    : syncPhase === "offline"
+                      ? "Sin red"
+                      : syncPhase === "error"
+                        ? "Error"
+                        : syncStatus.startsWith("Sincronizando")
+                          ? "Sincronizando"
+                          : "Cargando"}
+              </span>
             </span>
             <div className="flex rounded-xl border border-line bg-surface/60 p-1" role="tablist" aria-label="Vista del tablero">
               <ViewButton current={view} value="kanban" onViewChange={onViewChange}>
@@ -83,6 +99,15 @@ export function Header({
                 Lista
               </ViewButton>
             </div>
+            <button
+              type="button"
+              className={tinyButtonClass}
+              onClick={onRefresh}
+              disabled={refreshing || loading}
+              aria-label="Sincronizar / Refrescar"
+            >
+              {refreshing ? "Sincronizando…" : "Sincronizar"}
+            </button>
             <ThemeToggle />
             <button type="button" className={tinyButtonClass} onClick={onSignOut} disabled={signingOut}>
               {signingOut ? "Saliendo…" : "Salir"}

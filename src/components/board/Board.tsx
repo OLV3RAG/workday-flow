@@ -31,6 +31,7 @@ export function Board({ userId, email }: BoardProps) {
     syncPhase,
     syncStatus,
     reload,
+    refreshing,
     createTask,
     saveTask,
     updateTask,
@@ -115,6 +116,10 @@ export function Board({ userId, email }: BoardProps) {
         syncStatus={error || syncStatus}
         view={view}
         signingOut={signingOut}
+        refreshing={refreshing}
+        onRefresh={() => {
+          void reload();
+        }}
         onViewChange={setStoredView}
         onSignOut={() => {
           void signOut();
@@ -122,7 +127,7 @@ export function Board({ userId, email }: BoardProps) {
       />
       <div className="mx-auto grid w-full max-w-[1280px] gap-4 px-4 py-4 pb-16">
         <FilterBar filters={filters} shown={visible.length} total={tasks.length} onChange={setFilters} />
-        <NewTaskForm disabled={loading || Boolean(error)} onCreate={createTask} />
+        <NewTaskForm disabled={loading} onCreate={createTask} />
         {error ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-todo/40 bg-todo/10 px-4 py-3">
             <p role="alert" className="text-sm">
