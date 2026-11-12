@@ -84,7 +84,9 @@ export function Header({
                     ? "Guardando"
                     : syncPhase === "offline"
                       ? "Sin red"
-                      : syncPhase === "error"
+                      : syncPhase === "paused"
+                        ? "Sin vivo"
+                        : syncPhase === "error"
                         ? "Error"
                         : syncStatus.startsWith("Sincronizando")
                           ? "Sincronizando"

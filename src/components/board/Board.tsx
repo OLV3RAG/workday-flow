@@ -28,6 +28,7 @@ export function Board({ userId, email }: BoardProps) {
     tasks,
     loading,
     error,
+    realtimeNotice,
     syncPhase,
     syncStatus,
     reload,
@@ -137,6 +138,10 @@ export function Board({ userId, email }: BoardProps) {
               Reintentar
             </button>
           </div>
+        ) : realtimeNotice ? (
+          <p role="status" className="rounded-xl border border-line bg-surface/70 px-3 py-2 text-xs text-muted">
+            {realtimeNotice}
+          </p>
         ) : null}
         {loading ? (
           <div className="grid grid-cols-1 gap-3 min-[901px]:grid-cols-3">

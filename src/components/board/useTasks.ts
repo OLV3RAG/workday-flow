@@ -12,7 +12,7 @@ import {
   type TaskUpdate,
 } from "@/lib/types";
 
-export type SyncPhase = "loading" | "live" | "saving" | "offline" | "error";
+export type SyncPhase = "loading" | "live" | "saving" | "offline" | "paused" | "error";
 
 type PostgrestLikeError = {
   message: string;
@@ -40,10 +40,14 @@ function errorMessage(error: PostgrestLikeError): string {
 
 function reportError(action: string, error: PostgrestLikeError): string {
   console.error(`[tasks] ${action}`, error);
-  const friendly = errorMessage(error);
-  const detail = error.message.trim();
-  if (!detail || friendly.includes(detail)) return friendly;
-  return `${friendly} (${detail})`;
+  const parts = [errorMessage(error), error.message.trim(), error.details?.trim(), error.hint?.trim()].filter(
+    (part): part is string => Boolean(part),
+  );
+  return [...new Set(parts)].join(" — ");
+}
+
+function browserIsOnline(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine;
 }
 
 function upsertTask(tasks: Task[], task: Task): Task[] {
@@ -62,10 +66,12 @@ export function useTasks(userId: string) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [realtimeNotice, setRealtimeNotice] = useState("");
   const [syncPhase, setSyncPhase] = useState<SyncPhase>("loading");
   const [syncStatus, setSyncStatus] = useState("Cargando…");
   const loadedRef = useRef(false);
   const subscribedRef = useRef(false);
+  const realtimeProblemRef = useRef("");
 
   const setSync = useCallback((phase: SyncPhase, message: string) => {
     phaseRef.current = phase;
@@ -89,33 +95,45 @@ export function useTasks(userId: string) {
     }
     setError("");
 
-    const { data, error: loadError } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true });
+    try {
+      const { data, error: loadError } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
 
-    if (loadError) {
-      const message = reportError("select", loadError);
+      if (loadError) {
+        const message = reportError("select", loadError);
+        setError(message);
+        setSync(browserIsOnline() ? "error" : "offline", message);
+        setLoading(false);
+        setRefreshing(false);
+        return false;
+      }
+
+      const rows = data ?? [];
+      const parsed = rows.map(parseTask).filter((task): task is Task => task !== null);
+      if (parsed.length !== rows.length) {
+        console.error("[tasks] select", `${rows.length - parsed.length} filas no coinciden con el formato esperado`);
+      }
+      setTasks(parsed);
+      loadedRef.current = true;
+      setLoading(false);
+      setRefreshing(false);
+      if (!browserIsOnline()) setSync("offline", "El navegador está sin conexión.");
+      else if (subscribedRef.current) setSync("live", "En vivo");
+      else if (realtimeProblemRef.current) setSync("paused", realtimeProblemRef.current);
+      else if (!firstLoad) setSync("paused", "Los datos se cargaron. El canal en vivo no está conectado.");
+      return true;
+    } catch (cause) {
+      console.error("[tasks] select", cause);
+      const message = cause instanceof Error ? cause.message : "No se pudo contactar a Supabase.";
       setError(message);
-      setSync("error", message);
+      setSync(browserIsOnline() ? "error" : "offline", message);
       setLoading(false);
       setRefreshing(false);
       return false;
     }
-
-    const rows = data ?? [];
-    const parsed = rows.map(parseTask).filter((task): task is Task => task !== null);
-    if (parsed.length !== rows.length) {
-      console.error("[tasks] select", `${rows.length - parsed.length} filas no coinciden con el formato esperado`);
-    }
-    setTasks(parsed);
-    loadedRef.current = true;
-    setLoading(false);
-    setRefreshing(false);
-    if (subscribedRef.current) setSync("live", "En vivo");
-    else if (!firstLoad) setSync("offline", "Tareas actualizadas. La conexión en vivo sigue pendiente.");
-    return true;
   }, [setSync, supabase, userId]);
 
   useEffect(() => {
@@ -167,12 +185,18 @@ export function useTasks(userId: string) {
           if (!active || current !== generation) return;
           if (status === "SUBSCRIBED") {
             subscribedRef.current = true;
-            if (phaseRef.current !== "saving") setSync("live", "En vivo");
+            realtimeProblemRef.current = "";
+            setRealtimeNotice("");
+            if (phaseRef.current !== "saving" && browserIsOnline()) setSync("live", "En vivo");
           }
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             subscribedRef.current = false;
+            const detail = subscribeError instanceof Error ? subscribeError.message : "";
+            const message = detail ? `Canal en vivo ${status}: ${detail}` : `Canal en vivo ${status}`;
+            realtimeProblemRef.current = message;
             console.error("[tasks] realtime", status, subscribeError);
-            setSync("offline", "Sin conexión en vivo. Pulsa Sincronizar para traer los cambios.");
+            setRealtimeNotice(message);
+            setSync(browserIsOnline() ? "paused" : "offline", message);
           }
         });
     }
@@ -189,11 +213,19 @@ export function useTasks(userId: string) {
       void connect();
     }
 
+    function onOffline() {
+      setSync("offline", "El navegador está sin conexión.");
+    }
+
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onVisibility);
+    window.addEventListener("offline", onOffline);
     return () => {
       active = false;
       generation += 1;
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onVisibility);
+      window.removeEventListener("offline", onOffline);
       if (channel) void supabase.removeChannel(channel);
     };
   }, [load, setSync, supabase, userId]);
@@ -314,6 +346,7 @@ export function useTasks(userId: string) {
     loading,
     refreshing,
     error,
+    realtimeNotice,
     syncPhase,
     syncStatus,
     reload: load,
