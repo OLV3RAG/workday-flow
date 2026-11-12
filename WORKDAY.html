@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi tablero de trabajo</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --ink:#1c2530; --muted:#667385; --line:#d8dee6;
+  --todo:#d9534f; --prog:#e5a000; --done:#2f9e6b; --accent:#2b4c7e;
+  --col:#e3e8ee;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12171d; --surface:#1c242d; --ink:#e8edf2; --muted:#93a0b0; --line:#2e3946;
+    --col:#171e26; --accent:#7fa6dc; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12171d; --surface:#1c242d; --ink:#e8edf2; --muted:#93a0b0; --line:#2e3946;
+  --col:#171e26; --accent:#7fa6dc; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Figtree,system-ui,sans-serif;line-height:1.45}
+header{max-width:1200px;margin:0 auto;padding:28px 20px 8px;display:flex;flex-wrap:wrap;gap:16px;align-items:end;justify-content:space-between}
+h1{font-family:'Bricolage Grotesque',Figtree,sans-serif;font-size:2rem;margin:0;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:2px 0 0}
+.stats{display:flex;gap:10px;flex-wrap:wrap}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:92px}
+.stat b{font-family:'Bricolage Grotesque',sans-serif;font-size:1.4rem;display:block}
+.stat span{font-size:.8rem;color:var(--muted)}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;max-width:1200px;margin:10px auto 0;width:calc(100% - 40px);display:flex}
+.bar i{display:block;height:100%;transition:width .3s}
+.add{max-width:1200px;margin:18px auto 0;padding:0 20px}
+.add form,.add .box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;grid-template-columns:2fr 3fr auto auto auto}
+input,textarea,select,button{font:inherit;color:inherit}
+input,textarea,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+textarea{resize:vertical;min-height:42px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 14px}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) button.primary{color:#0e1620}}
+.board{max-width:1200px;margin:18px auto 40px;padding:0 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+.col{background:var(--col);border-radius:14px;padding:12px;min-height:240px;border-top:5px solid var(--c)}
+.col.over{outline:2px dashed var(--c)}
+.col h2{font-family:'Bricolage Grotesque',sans-serif;font-size:1.1rem;margin:4px 6px 12px;display:flex;justify-content:space-between;align-items:center}
+.count{background:var(--surface);border:1px solid var(--line);border-radius:99px;font-size:.8rem;padding:1px 10px;font-family:Figtree}
+.card{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px;margin-bottom:10px;cursor:grab}
+.card.dragging{opacity:.4}
+.card h3{margin:0 0 4px;font-size:1rem;overflow-wrap:anywhere}
+.card p{margin:0 0 10px;color:var(--muted);font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.card.done h3{text-decoration:line-through;opacity:.7}
+.meta{font-size:.75rem;color:var(--muted);margin-bottom:8px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.acts button{padding:4px 9px;font-size:.8rem}
+.prio{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 9px;border-radius:99px;margin-bottom:6px;color:var(--ink);background:color-mix(in srgb,var(--p) 22%,transparent);border:1px solid var(--p)}.prio.alta{--p:var(--todo)}.prio.media{--p:var(--prog)}.prio.baja{--p:var(--done)}
+.sync{display:inline-block;font-size:.8rem;color:var(--muted);margin-top:6px}
+.empty{color:var(--muted);text-align:center;padding:24px 8px;font-size:.9rem;border:1px dashed var(--line);border-radius:10px}
+.edit{display:grid;gap:8px}
+@media (max-width:900px){.board{grid-template-columns:1fr}.add form{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Mi tablero de trabajo</h1>
+    <p class="sub">Apunta pendientes, descríbelos y muévelos de columna.</p>
+    <span class="sync" id="sync" role="status"></span>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+<div class="bar" id="bar" aria-hidden="true"></div>
+
+<div class="add">
+  <form id="form">
+    <input id="titulo" placeholder="Título del pendiente" required maxlength="120" aria-label="Título">
+    <textarea id="desc" placeholder="Descripción (detalles, enlaces, notas…)" rows="1" aria-label="Descripción"></textarea>
+    <select id="estado" aria-label="Columna inicial">
+      <option value="todo">Por hacer</option>
+      <option value="prog">En progreso</option>
+      <option value="done">Terminado</option>
+    </select>
+    <select id="prioridad" aria-label="Prioridad">
+      <option value="alta">Prioridad alta</option>
+      <option value="media" selected>Prioridad media</option>
+      <option value="baja">Prioridad baja</option>
+    </select>
+    <button class="primary" type="submit">Agregar pendiente</button>
+  </form>
+</div>
+
+<main class="board" id="board"></main>
+
+<script>
+const COLS=[
+  {id:'todo',name:'Por hacer (TO DO)',color:'var(--todo)'},
+  {id:'prog',name:'En progreso (IN PROGRESS)',color:'var(--prog)'},
+  {id:'done',name:'Terminado (FINISHED)',color:'var(--done)'}
+];
+const KEY='tablero-pendientes-v1';
+const PR={alta:{n:'Alta',o:0},media:{n:'Media',o:1},baja:{n:'Baja',o:2}};
+let tasks=[];
+try{tasks=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){tasks=[]}
+let editing=null;
+let ref=null,pushTimer=null;
+function setStatus(t){const s=document.getElementById('sync');if(s)s.textContent=t}
+function cache(){try{localStorage.setItem(KEY,JSON.stringify(tasks))}catch(e){}}
+function push(now){
+  if(!ref)return;
+  clearTimeout(pushTimer);
+  const go=()=>{setStatus('Sincronizando…');ref.set({tasks:tasks,updated:Date.now()}).then(()=>setStatus('Sincronizado en tus dispositivos')).catch(()=>setStatus('No se pudo sincronizar. Se reintentará con el siguiente cambio.'))};
+  if(now)go();else pushTimer=setTimeout(go,400);
+}
+function save(){cache();push()}
+function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function fecha(t){return new Date(t).toLocaleDateString('es-MX',{day:'numeric',month:'short'})}
+
+function render(){
+  const board=document.getElementById('board');
+  board.innerHTML='';
+  COLS.forEach((c,ci)=>{
+    const items=tasks.filter(t=>t.estado===c.id).sort((a,b)=>PR[a.prioridad||'media'].o-PR[b.prioridad||'media'].o);
+    const col=document.createElement('section');
+    col.className='col';col.style.setProperty('--c',c.color);col.dataset.id=c.id;
+    col.innerHTML=`<h2>${c.name}<span class="count">${items.length}</span></h2>`;
+    if(!items.length) col.insertAdjacentHTML('beforeend','<div class="empty">Sin pendientes aquí. Arrastra una tarjeta o agrega una nueva.</div>');
+    items.forEach(t=>{
+      const card=document.createElement('article');
+      card.className='card'+(t.estado==='done'?' done':'');
+      card.draggable=true;card.dataset.id=t.id;
+      if(editing===t.id){
+        card.innerHTML=`<div class="edit"><input value="${esc(t.titulo)}" id="e-t" aria-label="Título"><textarea id="e-d" rows="3" aria-label="Descripción">${esc(t.desc)}</textarea><select id="e-p" aria-label="Prioridad">${Object.keys(PR).map(k=>`<option value="${k}"${(t.prioridad||'media')===k?' selected':''}>Prioridad ${PR[k].n.toLowerCase()}</option>`).join('')}</select><div class="acts"><button class="primary" data-a="guardar">Guardar cambios</button><button data-a="cancelar">Cancelar</button></div></div>`;
+      }else{
+        const prev=ci>0?`<button data-a="prev">← ${COLS[ci-1].id==='todo'?'Por hacer':'En progreso'}</button>`:'';
+        const next=ci<2?`<button data-a="next">${COLS[ci+1].id==='prog'?'En progreso':'Terminado'} →</button>`:'';
+        card.innerHTML=`<span class="prio ${t.prioridad||'media'}">Prioridad ${PR[t.prioridad||'media'].n.toLowerCase()}</span><h3>${esc(t.titulo)}</h3>${t.desc?`<p>${esc(t.desc)}</p>`:''}<div class="meta">Creado el ${fecha(t.creado)}</div><div class="acts">${prev}${next}<button data-a="editar">Editar</button><button data-a="borrar">Eliminar</button></div>`;
+      }
+      card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',t.id);card.classList.add('dragging')});
+      card.addEventListener('dragend',()=>card.classList.remove('dragging'));
+      card.addEventListener('click',e=>{
+        const a=e.target.dataset.a;if(!a)return;const t=tasks.find(x=>x.id===card.dataset.id);if(!t)return;
+        if(a==='next')t.estado=COLS[ci+1].id;
+        if(a==='prev')t.estado=COLS[ci-1].id;
+        if(a==='borrar'){if(!confirm('¿Eliminar este pendiente?'))return;tasks=tasks.filter(x=>x.id!==t.id)}
+        if(a==='editar'){editing=t.id;return render()}
+        if(a==='cancelar'){editing=null;return render()}
+        if(a==='guardar'){const v=card.querySelector('#e-t').value.trim();if(!v)return;t.titulo=v;t.desc=card.querySelector('#e-d').value.trim();t.prioridad=card.querySelector('#e-p').value;editing=null}
+        save();render();
+      });
+      col.appendChild(card);
+    });
+    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('over')});
+    col.addEventListener('dragleave',()=>col.classList.remove('over'));
+    col.addEventListener('drop',e=>{
+      e.preventDefault();col.classList.remove('over');
+      const t=tasks.find(x=>x.id===e.dataTransfer.getData('text/plain'));
+      if(t&&t.estado!==c.id){t.estado=c.id;save();render()}
+    });
+    board.appendChild(col);
+  });
+  const n=tasks.length||1;
+  const cnt=id=>tasks.filter(t=>t.estado===id).length;
+  document.getElementById('stats').innerHTML=
+    `<div class="stat"><b>${tasks.length}</b><span>Total</span></div>`+
+    `<div class="stat"><b>${cnt('prog')}</b><span>En progreso</span></div>`+
+    `<div class="stat"><b>${Math.round(cnt('done')/n*100)}%</b><span>Terminado</span></div>`;
+  document.getElementById('bar').innerHTML=COLS.map(c=>`<i style="width:${cnt(c.id)/n*100}%;background:${c.color}"></i>`).join('');
+}
+
+document.getElementById('form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const titulo=document.getElementById('titulo').value.trim();
+  if(!titulo)return;
+  tasks.push({id:'t'+Date.now()+Math.random().toString(36).slice(2,6),titulo,desc:document.getElementById('desc').value.trim(),prioridad:document.getElementById('prioridad').value,estado:document.getElementById('estado').value,creado:Date.now()});
+  save();e.target.reset();render();
+  document.getElementById('titulo').focus();
+});
+render();
+
+(async()=>{
+  setStatus('Conectando…');
+  try{
+    if(!window.claude||!claude.use){setStatus('Solo en este dispositivo');return}
+    const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
+    const id=user?await user.id():null;
+    if(!db||!id){setStatus('Solo en este dispositivo. Abre el enlace con tu sesión de Claude para sincronizar.');return}
+    ref=db.doc('data/users/'+id+'/board');
+    let first=true;
+    ref.onSnapshot(snap=>{
+      if(snap.hasPendingWrites)return;
+      const d=snap.exists?snap.data():null;
+      const remote=d&&Array.isArray(d.tasks)?d.tasks.map(x=>({...x})):null;
+      if(first){
+        first=false;
+        if(remote){
+          const ids=new Set(remote.map(x=>x.id));
+          const extra=tasks.filter(x=>!ids.has(x.id));
+          tasks=remote.concat(extra);
+          cache();if(!editing)render();
+          if(extra.length)push(true);else setStatus('Sincronizado en tus dispositivos');
+        }else{
+          if(tasks.length)push(true);else setStatus('Sincronizado en tus dispositivos');
+        }
+        return;
+      }
+      if(remote){tasks=remote;cache();if(!editing)render();setStatus('Sincronizado en tus dispositivos')}
+    },()=>setStatus('No se pudo sincronizar'));
+  }catch(e){setStatus('Solo en este dispositivo')}
+})();
+</script>
+</body>
+</html>
